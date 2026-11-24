@@ -1,0 +1,1328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Registry — a ledger that cannot be quietly corrected</title>
+<meta name="description" content="Register fingerprints of your data on-chain. Prove a copy is unaltered, and when it was first recorded. No owner, no admin, no upgrade path.">
+<style>
+:root{
+  --paper:#ffffff; --paper-2:#f5f6f8; --sheet:#ffffff; --ink:#0f1115; --ink-2:#4b5260; --mute:#8a909c;
+  --line:#e6e8ec; --line-2:#d3d7de;
+  --accent:#0a7c52; --red:#c2362b; --green:#0a7c52; --ochre:#a85d00; --hl:#e6f4ee;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --serif:var(--sans);
+  --mono:ui-monospace,"SF Mono","Cascadia Code",Menlo,Consolas,"Liberation Mono",monospace;
+  --lh:22px;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:72px}
+body{margin:0;background:#fafafa;color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased}
+::selection{background:#bfe6d4}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+button,input,select,textarea{font:inherit;color:inherit}
+.mono{font-family:var(--mono);font-size:.88em}
+.label{font-size:12px;font-weight:600;color:var(--ink-2);letter-spacing:.01em}
+.muted{color:var(--mute)}
+.hide{display:none!important}
+
+/* masthead */
+.mast{position:sticky;top:0;z-index:30;background:#ffffffee;backdrop-filter:saturate(1.4) blur(10px);border-bottom:1px solid var(--line)}
+.mast-in{max-width:1080px;margin:0 auto;padding:12px 24px;display:flex;align-items:center;gap:28px}
+.logo{font-weight:700;font-size:16px;letter-spacing:-.01em;color:var(--ink);display:flex;align-items:center;gap:8px;white-space:nowrap;text-transform:none}
+.logo:hover{text-decoration:none}
+.logo i{display:inline-block;width:10px;height:10px;border-radius:3px;background:var(--accent)}
+.logo small{display:none}
+.nav{display:flex;gap:22px;font-size:13px;font-weight:500;margin-left:auto}
+.nav a{white-space:nowrap;color:var(--ink-2)}
+.nav a:hover{color:var(--ink);text-decoration:none}
+.nav b{display:none}
+.wallet{display:flex;align-items:center;gap:12px}
+.net{font-size:12px;font-weight:500;display:flex;align-items:center;gap:6px;white-space:nowrap;color:var(--ink-2)}
+.net::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--mute)}
+.net.ok::before{background:var(--accent)}
+.net.bad{color:var(--red)} .net.bad::before{background:var(--red)}
+
+/* controls */
+.btn{font-size:13px;font-weight:600;background:var(--ink);color:#fff;border:1px solid var(--ink);border-radius:8px;padding:9px 16px;cursor:pointer;transition:background .12s,opacity .12s;white-space:nowrap}
+.btn:hover:not(:disabled){background:#2a2e36}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn.ghost{background:#fff;color:var(--ink);border-color:var(--line-2)}
+.btn.ghost:hover:not(:disabled){background:var(--paper-2)}
+.btn.sm{padding:6px 11px;font-size:12px;border-radius:7px}
+.btn[data-busy]{opacity:1;background:var(--paper-2);color:var(--ink-2);border-color:var(--line-2);cursor:progress;position:relative;overflow:hidden}
+.btn[data-busy]::after{content:"";position:absolute;left:0;bottom:0;height:2px;width:35%;background:var(--accent);animation:slide 1.3s ease-in-out infinite}
+.linkbtn{background:none;border:0;padding:0;cursor:pointer;font-size:13px;font-weight:500;color:var(--accent)}
+.linkbtn:hover{text-decoration:underline}
+.field{display:block;margin:0 0 18px}
+.field>.label{display:block;margin-bottom:6px}
+.field input,.field select{width:100%;background:#fff;border:1px solid var(--line-2);border-radius:8px;padding:9px 12px;font-size:14px;outline:0;transition:border-color .12s,box-shadow .12s}
+.field input:focus,.field select:focus,.panel input:focus{border-color:var(--accent);box-shadow:0 0 0 3px #0a7c5220}
+.field input.mono{font-size:13px}
+.field .hint{font-size:12px;color:var(--mute);margin-top:6px;display:block}
+.field select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--ink-2) 50%),linear-gradient(135deg,var(--ink-2) 50%,transparent 50%);background-position:calc(100% - 17px) 55%,calc(100% - 12px) 55%;background-size:5px 5px;background-repeat:no-repeat;padding-right:32px;cursor:pointer}
+.panel input:not([type=checkbox]){border:1px solid var(--line-2)!important;border-radius:8px;padding:8px 12px!important;background:#fff!important;outline:0}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+
+/* row editor */
+.rows{display:grid;grid-template-columns:auto 1fr;border:1px solid var(--line-2);border-radius:10px;background:#fff;height:calc(var(--lh)*10 + 18px);overflow:hidden;transition:border-color .12s,box-shadow .12s}
+.rows:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px #0a7c5220}
+.gutter{overflow:hidden;padding:9px 12px 28px 12px;border-right:1px solid var(--line);font-family:var(--mono);font-size:11.5px;line-height:var(--lh);color:var(--mute);background:#fafafa;user-select:none;min-width:150px}
+.gutter div{height:var(--lh);white-space:pre}
+.gutter .on{color:var(--mute)}
+.gutter .skip{opacity:.45}
+.gutter .sp{color:var(--ochre)}
+.rows textarea{border:0;outline:0;resize:none;background:transparent;padding:9px 14px;font-family:var(--mono);font-size:13px;line-height:var(--lh);white-space:pre;overflow:auto;width:100%;height:100%}
+.rows-foot{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--mute);margin:8px 0 18px}
+.rows-foot .warn{color:var(--ochre);font-weight:500}
+
+/* layout */
+.hero{max-width:1080px;margin:0 auto;padding:72px 24px 40px;display:grid;grid-template-columns:1.4fr 1fr;gap:56px;align-items:end}
+.hero h1{font-size:clamp(34px,4.6vw,52px);line-height:1.06;letter-spacing:-.03em;margin:0;font-weight:700}
+.hero h1 em{font-style:normal;color:var(--accent)}
+.hero p{font-size:17px;margin:20px 0 0;max-width:34em;color:var(--ink-2)}
+.hero .btn{text-decoration:none}
+.creed{list-style:none;margin:0;padding:0;display:grid;gap:0;border:1px solid var(--line);border-radius:12px;background:#fff;overflow:hidden}
+.creed li{display:block;padding:14px 18px;border-bottom:1px solid var(--line);font-size:14px;line-height:1.45;color:var(--ink-2)}
+.creed li:last-child{border:0}
+.creed b{display:none}
+.creed strong{color:var(--ink);font-weight:600}
+.sec{max-width:1080px;margin:0 auto;padding:56px 24px 8px;display:block;border-top:1px solid var(--line)}
+.sec-head{margin-bottom:6px}
+.sec-head .num{display:none}
+.sec-head .label{display:block;color:var(--accent);font-size:12px;font-weight:600;position:static;margin:0}
+.sec h2{font-size:26px;line-height:1.2;margin:0 0 8px;letter-spacing:-.02em;font-weight:650}
+.sec .lede{margin:0 0 28px;max-width:42em;color:var(--ink-2)}
+.sheet{background:#fff;border:1px solid var(--line);border-radius:12px;padding:24px}
+.sheet.shadow{box-shadow:none}
+.two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:28px;align-items:start}
+
+/* verdict */
+.cert{border:1px solid var(--line);border-radius:12px;background:#fff;min-height:100%;position:relative;padding:22px 24px 20px;overflow:hidden}
+.cert.empty{display:grid;place-items:center;text-align:center;color:var(--mute);background:#fff;min-height:360px;border-style:dashed;border-color:var(--line-2)}
+.cert.empty .ghost{display:none}
+.cert.working{opacity:.55;transition:opacity .15s}
+.cert h3{margin:0 0 6px;font-size:12px;font-weight:600;color:var(--ink-2)}
+.cert .verdict-line{font-size:22px;line-height:1.25;letter-spacing:-.015em;font-weight:650;margin:2px 0 10px}
+.cert .body{font-size:14.5px;color:var(--ink-2);max-width:34em}
+.stamp{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 12px;margin:-22px -24px 18px;padding:12px 24px;border-bottom:1px solid transparent;float:none;position:static;transform:none;border:0;text-align:left;font-family:var(--sans);line-height:1.3}
+.stamp .s1{display:inline;font-size:14px;font-weight:700;letter-spacing:0;text-transform:none}
+.stamp .s1::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;background:currentColor;margin-right:8px;vertical-align:1px}
+.stamp .s2{display:inline;font-size:13px;font-weight:500;margin:0;padding:0;border:0;text-transform:none;letter-spacing:0;opacity:.85}
+.stamp.green{background:#e8f6ef;color:#0a6b47}
+.stamp.ochre{background:#fdf2df;color:#8a4b00}
+.stamp.red{background:#fdecea;color:#a52a1d}
+.facts{display:grid;grid-template-columns:auto 1fr;gap:8px 20px;margin:18px 0;padding:14px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line);font-size:14px}
+.facts dt{font-size:12px;font-weight:600;color:var(--ink-2);padding-top:1px}
+.facts dd{margin:0}
+.callout{border:1px solid #f0d9a8;background:#fffaf0;border-radius:8px;padding:10px 14px;margin:14px 0;font-size:14px}
+.callout.red{border-color:#f3c7c2;background:#fff6f5}
+.callout.green{border-color:#bfe6d4;background:#f4fbf7}
+.rowlist{max-height:240px;overflow:auto;border:1px solid var(--line);border-radius:8px;background:#fff}
+.rowlist .r{display:grid;grid-template-columns:36px 20px 1fr auto;gap:6px;padding:4px 12px;font-family:var(--mono);font-size:12.5px;border-bottom:1px solid #f0f1f3}
+.rowlist .r:last-child{border:0}
+.rowlist .r .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rowlist .r.ok .m{color:var(--accent)}
+.rowlist .r.bad{background:#fff6f5} .rowlist .r.bad .m{color:var(--red);font-weight:700} .rowlist .r.bad .t{color:var(--red)}
+.rowlist .r .why{color:var(--red);font-family:var(--sans);font-size:11px}
+.fine{font-size:12px;color:var(--mute);margin-top:12px}
+
+/* catalogue table */
+.ledger{border:1px solid var(--line);border-radius:12px;background:#fff;overflow:hidden}
+.lhead,.lrow-main{display:grid;grid-template-columns:44px minmax(0,1fr) 64px 140px 180px 34px;gap:12px;align-items:center;padding:14px 16px}
+.lhead{font-size:12px;font-weight:600;color:var(--ink-2);background:#fafafa;border-bottom:1px solid var(--line);padding-top:10px;padding-bottom:10px}
+.lrow{border-bottom:1px solid var(--line)}
+.lrow:last-child{border-bottom:0}
+.lrow.open{background:#fcfcfd}
+.lrow .no{font-size:14px;font-weight:600;color:var(--mute)}
+.lrow .ttl{font-size:15px;font-weight:600;line-height:1.3;overflow-wrap:anywhere}
+.lrow .by{font-size:12px;color:var(--mute)}
+.lrow .tag{font-size:10.5px;font-weight:600;border-radius:999px;padding:1px 8px;margin-left:8px;vertical-align:1px;background:var(--paper-2);color:var(--ink-2);border:0}
+.lrow .tag.you,.lrow .tag.has{background:#e8f6ef;color:#0a6b47}
+.lrow .price{font-family:var(--mono);font-size:13px}
+.lrow .chev{background:none;border:0;cursor:pointer;font-size:14px;color:var(--mute);transition:transform .2s;padding:4px}
+.lrow.open .chev{transform:rotate(180deg)}
+.lrow-detail{padding:8px 24px 28px 72px;display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:36px}
+.tl{list-style:none;margin:0;padding:0 0 0 16px;border-left:1px solid var(--line-2)}
+.tl li{position:relative;padding:0 0 22px 16px}
+.tl li::before{content:"";position:absolute;left:-22px;top:6px;width:11px;height:11px;border-radius:50%;background:#fff;border:2px solid var(--line-2)}
+.tl li.latest::before{background:var(--accent);border-color:var(--accent)}
+.tl .v{font-size:12px;font-weight:600;color:var(--ink-2)}
+.tl .n{font-size:15px;margin:2px 0}
+.tl .meta{font-size:12px;color:var(--mute);line-height:1.65}
+.chip{font-size:11px;font-weight:600;padding:1px 8px;border-radius:999px;margin-left:8px;white-space:nowrap;border:0}
+.chip.g{background:#e8f6ef;color:#0a6b47} .chip.o{background:#fdf2df;color:#8a4b00} .chip.r{background:#fdecea;color:#a52a1d}
+.grade{display:grid;grid-template-columns:60px 1fr;gap:14px;align-items:center;margin-bottom:10px}
+.grade .g{font-size:34px;font-weight:700;line-height:1;text-align:center;border-radius:12px;padding:14px 0;background:var(--paper-2);border:0}
+.grade .g.A{background:#e8f6ef;color:#0a6b47} .grade .g.B{background:#fdf2df;color:#8a4b00} .grade .g.C{background:#fdecea;color:#a52a1d}
+.meter{margin:10px 0;font-size:12px;color:var(--ink-2)}
+.meter .bar{height:4px;background:var(--line);border-radius:2px;margin-top:5px;position:relative;overflow:hidden}
+.meter .bar i{position:absolute;left:0;top:0;bottom:0;background:var(--accent);border-radius:2px;transition:width .8s cubic-bezier(.2,.8,.2,1)}
+.meter span{display:flex;justify-content:space-between}
+.panel{border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin-bottom:16px;background:#fff}
+.panel h4{margin:0 0 10px;font-size:13px;font-weight:650}
+.split{display:flex;height:6px;border-radius:3px;overflow:hidden;margin:10px 0 6px}
+.split i{display:block} .split i:first-child{background:var(--accent);width:85%} .split i:last-child{background:var(--line-2);flex:1}
+.empty-note{padding:36px 18px;color:var(--mute)}
+
+/* provider desk */
+.tabs{display:flex;gap:4px;margin-bottom:18px}
+.tabs button{font-size:13px;font-weight:600;background:transparent;border:0;border-radius:7px;padding:7px 14px;cursor:pointer;color:var(--ink-2)}
+.tabs button:hover{background:var(--paper-2)}
+.tabs button[aria-selected=true]{background:var(--paper-2);color:var(--ink)}
+.tabbody{padding:0}
+.status-strip{display:flex;gap:12px;align-items:center;flex-wrap:wrap;font-size:14px;margin-bottom:20px;padding-bottom:16px;border-bottom:1px solid var(--line);border-radius:4px}
+
+/* account */
+.balance{font-size:44px;font-weight:700;letter-spacing:-.03em;line-height:1.1;margin:6px 0 4px;border-radius:6px}
+.balance small{font-size:16px;letter-spacing:0;font-weight:500;color:var(--ink-2)}
+.subs{list-style:none;padding:0;margin:0}
+.subs li{display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px solid var(--line);font-size:14px}
+.subs li:last-child{border:0}
+.out{margin-top:12px;font-size:14px;min-height:1.5em}
+#balCard hr{border:0!important;border-top:1px solid var(--line)!important}
+
+/* charter */
+.charter{display:grid;grid-template-columns:1fr 1fr;gap:40px}
+.charter h3{font-size:16px;margin:0 0 4px;font-weight:650}
+.charter p{margin:0 0 22px;color:var(--ink-2);font-size:14.5px}
+.params{width:100%;border-collapse:collapse;font-size:14px}
+.params td{padding:9px 0;border-bottom:1px solid var(--line);vertical-align:top}
+.params td:last-child{text-align:right;font-family:var(--mono);font-size:12.5px;overflow-wrap:anywhere;padding-left:14px}
+.not{list-style:none;padding:0;margin:0}
+.not li{padding:8px 0 8px 22px;position:relative;border-bottom:1px solid var(--line);font-size:14px;color:var(--ink-2)}
+.not li:last-child{border:0}
+.not li::before{content:"–";position:absolute;left:4px;color:var(--mute)}
+footer{max-width:1080px;margin:64px auto 0;padding:24px 24px 120px;border-top:1px solid var(--line);display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;font-size:12px;color:var(--mute)}
+footer a{color:var(--ink-2)}
+
+/* banner */
+#banner .b{background:var(--ink);color:#fff;font-size:13px;font-weight:500}
+#banner .b.red{background:#fdecea;color:#a52a1d;border-bottom:1px solid #f3c7c2}
+#banner .b div{max-width:1080px;margin:0 auto;padding:10px 24px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+#banner .btn{background:#fff;color:var(--ink);border-color:var(--line-2);padding:5px 12px;font-size:12px}
+
+/* transaction docket */
+#docket{position:fixed;right:20px;bottom:20px;width:min(380px,calc(100vw - 24px));z-index:50;display:flex;flex-direction:column;gap:10px;max-height:calc(100vh - 100px);overflow:auto;padding:4px;pointer-events:none}
+#docket>*{pointer-events:auto}
+.slip{background:#fff;border:1px solid var(--line-2);border-radius:12px;box-shadow:0 8px 28px rgba(15,17,21,.10);padding:14px 16px;position:relative;animation:slipin .25s ease-out both;overflow:hidden;--c:var(--ochre)}
+.slip::before{content:none}
+.slip[data-state=confirmed]{--c:var(--accent)} .slip[data-state=reverted],.slip[data-state=blocked]{--c:var(--red)} .slip[data-state=rejected],.slip[data-state=cancelled]{--c:var(--mute)}
+.slip-top{display:flex;align-items:center;gap:8px;cursor:pointer}
+.slip .fn{font-family:var(--mono);font-weight:600;font-size:13px}
+.slip .st{margin-left:auto;font-size:12px;font-weight:600;color:var(--c);display:flex;align-items:center;gap:6px}
+.slip .st::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--c)}
+.slip[data-state=signing] .st::before,.slip[data-state=pending] .st::before,.slip[data-state=preflight] .st::before{animation:pulse 1.2s ease-in-out infinite}
+.slip .x{background:none;border:0;cursor:pointer;font-size:16px;line-height:1;color:var(--mute);padding:0 2px}
+.slip .x:hover{color:var(--ink)}
+.slip .call{font-family:var(--mono);font-size:11.5px;color:var(--mute);padding:6px 0 0;overflow-wrap:anywhere}
+.slip .sb{padding:12px 0 0;font-size:13px;color:var(--ink-2);display:grid;gap:10px}
+.slip[data-state=rejected],.slip[data-state=cancelled]{opacity:.8}
+.slip .ml{display:none;padding:6px 0 0;font-size:12px;color:var(--ink-2)}
+.slip.mini .ml{display:block}
+.slip.mini .call,.slip.mini .sb{display:none}
+.slip.mini{padding-bottom:11px}
+.slip a{font-weight:600}
+.wax{width:22px;height:22px;border-radius:50%;border:2.5px solid var(--line-2);border-top-color:var(--accent);animation:spin 1s linear infinite;flex:none}
+.sign-row{display:flex;gap:12px;align-items:center}
+.inkline{height:3px;background:var(--line);border-radius:2px;position:relative;overflow:hidden}
+.inkline::after{content:"";position:absolute;top:0;bottom:0;left:0;width:35%;border-radius:2px;background:var(--accent);animation:slide 1.5s ease-in-out infinite}
+.pend-row{display:flex;justify-content:space-between;gap:10px;align-items:baseline}
+.pend-row .tm{font-family:var(--mono);font-size:12px;color:var(--ink)}
+.seal{width:26px;height:26px;border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center;font-size:0;flex:none;position:relative}
+.seal span{display:none}
+.seal::before{content:"✓";font-size:14px;font-weight:700;line-height:1}
+.seal::after{content:none}
+.conf-row{display:flex;gap:12px;align-items:center}
+.conf-row .big{font-size:14px;color:var(--ink);font-weight:600;line-height:1.3}
+
+/* motion */
+.flash{animation:flash 2s ease-out}
+@keyframes flash{0%,20%{background-color:var(--hl);box-shadow:0 0 0 5px var(--hl)}100%{background-color:transparent;box-shadow:0 0 0 5px transparent}}
+@keyframes slide{0%{transform:translateX(-110%)}100%{transform:translateX(300%)}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes slipin{from{transform:translateY(10px);opacity:0}to{transform:none;opacity:1}}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important}}
+
+/* roles */
+.panel div[style*="border-top:1px solid var(--ink)"]{border-top-color:var(--line)!important}
+body[data-role=none] [data-for=vendor],body[data-role=none] [data-for=subscriber],body[data-role=none] [data-for=both],
+body[data-role=vendor] [data-for=subscriber],body[data-role=vendor] [data-for=none],
+body[data-role=subscriber] [data-for=vendor],body[data-role=subscriber] [data-for=none]{display:none!important}
+.seg{display:inline-flex;background:var(--paper-2);border-radius:9px;padding:3px;gap:2px}
+.seg button{border:0;background:transparent;font-size:12px;font-weight:600;padding:5px 12px;border-radius:7px;cursor:pointer;color:var(--ink-2)}
+.seg button[aria-pressed=true]{background:#fff;color:var(--ink);box-shadow:0 1px 2px rgba(15,17,21,.12)}
+.choose{display:grid;gap:12px}
+.choice{display:block;text-align:left;width:100%;background:#fff;border:1px solid var(--line-2);border-radius:12px;padding:18px 20px;cursor:pointer;transition:border-color .12s,box-shadow .12s}
+.choice:hover{border-color:var(--accent);box-shadow:0 0 0 3px #0a7c5218}
+.choice strong{display:block;font-size:17px;font-weight:650;margin-bottom:3px}
+.choice span{display:block;font-size:13.5px;color:var(--ink-2)}
+#vEditorMount .gutter{display:none}
+#vEditorMount .rows{grid-template-columns:1fr}
+.slip .fn{font-family:var(--sans);font-size:14px;font-weight:650}
+.slip .call{font-family:var(--sans);font-size:13px;color:var(--ink-2)}
+.slip .call:empty{display:none}
+/* responsive */
+@media (max-width:980px){
+  .hero{grid-template-columns:1fr;gap:28px;padding-top:44px}
+  .two,.charter,.lrow-detail{grid-template-columns:1fr}
+  .lrow-detail{padding:8px 16px 24px}
+  .nav{display:none}
+  .lhead{display:none}
+  .lrow-main{grid-template-columns:30px 1fr 34px;grid-template-areas:"no ttl chev" ". meta meta";}
+  .lrow-main .no{grid-area:no}.lrow-main .tt{grid-area:ttl}.lrow-main .chev{grid-area:chev}.lrow-main .meta{grid-area:meta}
+  .lrow-main .vers,.lrow-main .price{display:none}
+  .row2{grid-template-columns:1fr}
+}
+@media (min-width:981px){.lrow-main .meta{display:contents}}
+@media (max-width:560px){.mast-in{padding:10px 16px;gap:10px}.net{display:none}.logo{font-size:0}.logo i{width:14px;height:14px}.sec,.hero{padding-left:16px;padding-right:16px}.gutter{min-width:112px}}
+</style>
+</head>
+<body data-role="none">
+
+
+
+<header class="mast">
+  <div class="mast-in">
+    <a class="logo" href="#top"><i></i>Registry<small>of data fingerprints</small></a>
+    <nav class="nav" aria-label="Sections">
+      <a data-for="subscriber" href="#verify">Verify</a>
+      <a data-for="subscriber" href="#catalogue">Catalogue</a>
+      <a data-for="subscriber" href="#account">Access</a>
+      <a data-for="subscriber" href="#charter">Charter</a>
+      <a data-for="vendor" href="#desk">Publish</a>
+      <a data-for="vendor" href="#mine">Your datasets</a>
+      <a data-for="vendor" href="#earnings">Earnings</a>
+    </nav>
+    <div class="wallet">
+      <div class="seg" role="group" aria-label="View as"><button data-pick="subscriber" aria-pressed="false">Subscriber</button><button data-pick="vendor" aria-pressed="false">Vendor</button></div>
+      <span class="net" id="net">No wallet</span>
+      <button class="btn sm" id="connect">Connect wallet</button>
+    </div>
+  </div>
+</header>
+<div id="banner"></div>
+
+<div id="top"></div>
+<section class="hero" data-for="none">
+  <div>
+    <h1>A ledger that <em>cannot be quietly corrected.</em></h1>
+    <p>Data vendors register fingerprints of their data. Subscribers prove whether a copy is, or is not, what was recorded — and when. There is no owner, no admin, no upgrade key. Not even whoever deployed it can change the rules.</p>
+  </div>
+  <div class="choose">
+    <button class="choice" data-pick="vendor"><strong>I’m a vendor</strong><span>Register your data, publish corrections in public, set a price and get paid.</span></button>
+    <button class="choice" data-pick="subscriber"><strong>I’m a subscriber</strong><span>Verify the data you hold, browse datasets and subscribe.</span></button>
+  </div>
+</section>
+<section class="hero" data-for="vendor">
+  <div>
+    <h1>Publish data <em>nobody can say you changed.</em></h1>
+    <p>Register a fingerprint of every row, correct mistakes in the open, and get paid for access. Your history is timestamped by the blockchain, not by you.</p>
+    <p style="margin-top:18px"><a class="btn" href="#desk">Register a dataset</a></p>
+  </div>
+  <ol class="creed">
+    <li>Only fingerprints go on-chain. <strong>Your raw data never leaves your computer.</strong></li>
+    <li>A correction is a <strong>new version</strong>. The old one stays visible, so you can prove what you said and when.</li>
+    <li>Each subscription is split <strong id="creedSplit">85 / 15</strong> in code, paid into your balance.</li>
+  </ol>
+</section>
+<section class="hero" data-for="subscriber">
+  <div>
+    <h1>Know the data you hold is <em>the data that was recorded.</em></h1>
+    <p>Check any copy against the vendor’s timestamped record, read the full history of corrections, and subscribe to what you can verify. Nobody can edit that record — including us.</p>
+    <p style="margin-top:18px"><a class="btn" href="#verify">Check a copy</a></p>
+  </div>
+  <ol class="creed">
+    <li>Your rows are checked <strong>in your browser</strong>. Nothing you paste is uploaded.</li>
+    <li>Every version carries <strong>the blockchain’s clock</strong>, not the vendor’s word.</li>
+    <li>If a vendor corrects data, you will see <strong>exactly when and why</strong>.</li>
+  </ol>
+</section>
+
+<!-- ================= I. VERIFY ================= -->
+<section class="sec" id="verify" data-for="subscriber">
+  <div class="sec-head"><div class="num">I.</div><span class="label">Verify a copy</span></div>
+  <div>
+    <h2>Is the copy you hold the one that was recorded?</h2>
+    <p class="lede">Paste the rows of your file, one per line. Each row is fingerprinted here and compared with every version the provider has registered. This is a free read — no transaction, no gas.</p>
+    <div class="two">
+      <div>
+        <label class="field"><span class="label">Dataset</span>
+          <select id="vSel"><option value="">Connect to a Sepolia wallet to load datasets…</option></select>
+        </label>
+        <div class="rows-wrap" id="vEditorMount"></div>
+        <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">
+          <button class="btn" id="vGo">Check against the record</button>
+          <button class="linkbtn" id="vSample" type="button">Insert sample rows</button>
+        </div>
+      </div>
+      <div id="cert" aria-live="polite"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= II. CATALOGUE ================= -->
+<section class="sec" id="catalogue" data-for="subscriber">
+  <div class="sec-head"><div class="num">II.</div><span class="label">Catalogue</span></div>
+  <div>
+    <h2>Registered datasets</h2>
+    <p class="lede">Open any entry to read its full version history and its provider's track record. A subscription buys access for a fixed period; the payment is split between provider and platform when it is made.</p>
+    <div class="ledger" id="ledger">
+      <div class="lhead"><span>№</span><span>Dataset</span><span>Vers.</span><span>Price / period</span><span>Access</span><span></span></div>
+      <div id="ledgerBody"></div>
+    </div>
+    <p class="fine" id="ledgerNote"></p>
+  </div>
+</section>
+
+<!-- ================= III. PROVIDER DESK ================= -->
+<section class="sec" id="desk" data-for="vendor">
+  <div class="sec-head"><div class="num">I.</div><span class="label">Publish</span></div>
+  <div>
+    <h2>Register a dataset, or correct one in public</h2>
+    <p class="lede">Only hashes go on-chain. A correction never overwrites anything: it adds a new version, and the earlier ones remain readable by everyone, forever.</p>
+
+    <div class="sheet shadow" id="providerGate">
+      <div class="status-strip" id="deskStatus" data-flash="desk"></div>
+      <div id="gateRegister" class="hide">
+        <div class="two">
+          <div>
+            <label class="field"><span class="label">Provider name</span><input id="pName" maxlength="280" placeholder="e.g. Meridian Market Data Ltd." autocomplete="off"><span class="hint">Shown publicly. Not verified by the contract. Permanent.</span></label>
+            <button class="btn" id="pGo">Register as provider</button>
+          </div>
+          <div class="callout" style="margin:0"><strong>One-time listing fee: <span id="feeText">—</span>.</strong> Read from the contract, credited to the platform, not refundable. One profile per wallet; nobody can edit or remove it afterwards.</div>
+        </div>
+      </div>
+      <div id="gateForms" class="hide">
+        <div class="tabs" role="tablist"><button role="tab" aria-selected="true" data-tab="new">New dataset</button><button role="tab" aria-selected="false" data-tab="fix">Correction</button></div>
+        <div class="tabbody">
+          <div id="tabNew">
+            <label class="field"><span class="label">Dataset name</span><input id="dName" maxlength="280" autocomplete="off" placeholder="e.g. EOD prices — January 2026"></label>
+            <div id="dEditorMount"></div>
+            <div class="row2">
+              <label class="field"><span class="label">Declared data date (your claim)</span><input id="dDate" type="datetime-local"><span class="hint">When the data is “from”. Unverified, and cannot be in the future. The block's time is what counts.</span></label>
+              <label class="field"><span class="label">Note (optional)</span><input id="dNote" maxlength="280" autocomplete="off" placeholder="What this data is"></label>
+            </div>
+            <button class="btn" id="dGo">Register dataset</button>
+            <span class="fine" style="margin-left:12px">Each row costs about 22,000 gas to store. Limit: <span class="maxrows">500</span> rows.</span>
+          </div>
+          <div id="tabFix" class="hide">
+            <label class="field"><span class="label">Dataset to correct</span><select id="cSel"></select></label>
+            <div id="cEditorMount"></div>
+            <div class="row2">
+              <label class="field"><span class="label">Declared data date (your claim)</span><input id="cDate" type="datetime-local"></label>
+              <label class="field"><span class="label">Reason (required, public)</span><input id="cReason" maxlength="280" autocomplete="off" placeholder="What was wrong"></label>
+            </div>
+            <div class="callout"><span id="cNote">Pick a dataset.</span></div>
+            <button class="btn" id="cGo">Submit correction</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= VENDOR: YOUR DATASETS ================= -->
+<section class="sec" id="mine" data-for="vendor">
+  <div class="sec-head"><div class="num">II.</div><span class="label">Your datasets</span></div>
+  <div>
+    <h2>Your published datasets</h2>
+    <p class="lede">Open a dataset to read its version history, set its price or add a correction.</p>
+    <div class="ledger">
+      <div class="lhead"><span>№</span><span>Dataset</span><span>Vers.</span><span>Price / period</span><span>Status</span><span></span></div>
+      <div id="myBody"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= VENDOR: EARNINGS ================= -->
+<section class="sec" id="earnings" data-for="vendor">
+  <div class="sec-head"><div class="num">III.</div><span class="label">Earnings</span></div>
+  <div>
+    <h2>Your balance and track record</h2>
+    <p class="lede">Payments are credited to your balance when a subscriber pays, and wait there until you withdraw.</p>
+    <div class="two">
+      <div class="sheet" id="balCard">
+        <span class="label">Withdrawable balance</span>
+        <div class="balance" id="balance" data-flash="balance">—<small> ETH</small></div>
+        <p class="fine" id="balNote" style="margin:0 0 16px">Connect a wallet to see your balance.</p>
+        <button class="btn" id="wGo" disabled>Withdraw</button>
+        <p class="fine">Your share of every payment is <strong class="shareText">…</strong>, fixed in code.</p>
+      </div>
+      <div class="panel">
+        <h4>Your track record</h4>
+        <div id="myScore"></div>
+        <p class="fine">Calculated by the contract from your registrations and corrections. This is what subscribers see when they look you up.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= SUBSCRIBER: ACCESS ================= -->
+<section class="sec" id="account" data-for="subscriber">
+  <div class="sec-head"><div class="num">III.</div><span class="label">Your access</span></div>
+  <div>
+    <h2>Your subscriptions, and who you’re buying from</h2>
+    <p class="lede">See what you currently have access to, check anyone’s access, or look up a vendor’s track record before you buy.</p>
+    <div class="two">
+      <div>
+        <div class="panel">
+          <h4>Active subscriptions</h4>
+          <ul class="subs" id="subs"><li class="muted">—</li></ul>
+        </div>
+        <div class="panel">
+          <h4>Check access</h4>
+          <label class="field"><span class="label">Address</span><input id="aAddr" class="mono" placeholder="0x…" autocomplete="off"></label>
+          <label class="field"><span class="label">Dataset №</span><input id="aId" type="number" min="1" step="1" placeholder="1"></label>
+          <button class="btn sm" id="aGo">Check</button>
+          <div class="out" id="aOut"></div>
+          <p class="fine">This is an on-chain record only. The contract never holds the data; whoever delivers it must check this first.</p>
+        </div>
+      </div>
+      <div class="panel">
+        <h4>Vendor track record</h4>
+        <label class="field"><span class="label">Vendor address</span><input id="sAddr" class="mono" placeholder="0x…" autocomplete="off"></label>
+        <button class="btn sm" id="sGo">Look up</button>
+        <div id="sOut" style="margin-top:14px"></div>
+        <p class="fine">You can also open any dataset in the catalogue to see its vendor’s record.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= V. CHARTER ================= -->
+<section class="sec" id="charter" data-for="subscriber">
+  <div class="sec-head"><div class="num">IV.</div><span class="label">Charter</span></div>
+  <div>
+    <h2>Why nobody can cheat this — and what it still can't tell you</h2>
+    <p class="lede">The strength of this registry is what it lacks. The numbers on the right are read from the contract right now, not written into this page.</p>
+    <div class="charter">
+      <div>
+        <h3>No owner. No admin. No upgrade path.</h3>
+        <p>The contract has no owner or admin role, no pause switch, no way to change fees and no upgrade mechanism. The only things its deployer chose are five numbers, fixed at deployment and shown here. After that the deployer has exactly the powers of any stranger.</p>
+        <h3>Append-only history</h3>
+        <p>A correction adds version N+1 and links to N. Earlier versions are never edited or deleted, so “the provider said X on this date and only fixed it to Y later” is provable.</p>
+        <h3>The money rule is in the code</h3>
+        <p>Each payment is split between provider and platform at the moment it is made, then collected by withdrawal. A provider wallet that refuses money cannot block anyone else's subscription.</p>
+        <p><a href="#" id="esCode" target="_blank" rel="noopener">Read the contract on Etherscan ↗</a> &nbsp;·&nbsp; <a href="#" id="esRead" target="_blank" rel="noopener">Call it directly ↗</a></p>
+      </div>
+      <div>
+        <h3>Read from the chain, live</h3>
+        <table class="params" id="params"><tr><td colspan="2" class="muted">Connect a wallet on Sepolia to read them.</td></tr></table>
+        <h3 style="margin-top:28px">What it does not tell you</h3>
+        <ul class="not">
+          <li>That the data is <strong>true</strong>. A provider can register hashes of bad data; the registry proves what was claimed and when.</li>
+          <li>That a <strong>declared data date</strong> is real. Only the block timestamp is trustworthy, and block time can drift by a few seconds.</li>
+          <li>That a subscriber <strong>received</strong> data. Delivery happens off-chain; “access” is only an on-chain signal.</li>
+          <li>That a simple row can't be <strong>guessed</strong> from its hash, if the row is easy to guess.</li>
+          <li>Anything about <strong>refunds</strong> (there are none) or <strong>lost keys</strong> (unrecoverable).</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <span>Sepolia testnet · test ETH only · no backend, no tracking, no cookies</span>
+  <span><a id="esFoot" target="_blank" rel="noopener" href="#"></a></span>
+</footer>
+
+<aside id="docket" aria-live="polite" aria-label="Transactions"></aside>
+
+<script src="https://cdn.jsdelivr.net/npm/ethers@6.13.4/dist/ethers.umd.min.js"></script>
+<script>
+(() => {
+'use strict';
+
+/* ======================= constants ======================= */
+const ADDR = '0xD4251CCfF1f7f0fdf837Efb29d874D9116C0213f';
+const CHAIN_ID = 11155111n, CHAIN_HEX = '0xaa36a7';
+const ES = 'https://sepolia.etherscan.io';
+const ABI = [
+  "function MAX_TEXT_LENGTH() view returns (uint256)",
+  "function MAX_ROWS() view returns (uint256)",
+  "function PROVIDER_SHARE_PERCENT() view returns (uint256)",
+  "function platformWallet() view returns (address)",
+  "function listingFee() view returns (uint256)",
+  "function accessDuration() view returns (uint256)",
+  "function onTimeWindow() view returns (uint256)",
+  "function backfillThreshold() view returns (uint256)",
+  "function providers(address) view returns (address wallet, string name, uint64 registeredAt, bool exists)",
+  "function datasets(uint256) view returns (uint256 id, address provider, string name, uint64 createdAt, uint256 latestVersion)",
+  "function datasetCount() view returns (uint256)",
+  "function prices(uint256) view returns (uint256)",
+  "function accessExpiry(address, uint256) view returns (uint256)",
+  "function balances(address) view returns (uint256)",
+  "function registerProvider(string name) payable",
+  "function registerDataset(string name, bytes32[] rowHashes, uint64 dataTimestamp, string note) returns (uint256 datasetId)",
+  "function submitCorrection(uint256 datasetId, bytes32[] newRowHashes, uint64 dataTimestamp, string reason)",
+  "function setPrice(uint256 datasetId, uint256 price)",
+  "function subscribe(uint256 datasetId) payable",
+  "function withdraw()",
+  "function getRecord(uint256 datasetId, uint256 version) view returns (tuple(bytes32[] rowHashes, uint64 timestamp, uint64 dataTimestamp, uint64 blockNumber, bool isBackfilled, uint256 version, uint256 previousVersion, uint256 changePercent, string note))",
+  "function getLatestRecord(uint256 datasetId) view returns (tuple(bytes32[] rowHashes, uint64 timestamp, uint64 dataTimestamp, uint64 blockNumber, bool isBackfilled, uint256 version, uint256 previousVersion, uint256 changePercent, string note))",
+  "function verifyHash(uint256 datasetId, bytes32[] rowHashes) view returns (bool found, uint256 version, uint64 timestamp, uint64 dataTimestamp, bool isLatest)",
+  "function classifyCopy(uint256 datasetId, bytes32[] rowHashes) view returns (uint8 status, uint256 matchedVersion, uint256 bestMatchPercent)",
+  "function hasAccess(address user, uint256 datasetId) view returns (bool)",
+  "function getProviderDatasetIds(address provider) view returns (uint256[])",
+  "function getScorecard(address provider) view returns (tuple(uint256 datasetCount, uint256 recordCount, uint256 correctionCount, uint256 correctionRatePercent, uint256 avgChangePercent, uint256 onTimePercent, uint256 backfilledCount, string grade))",
+  "function computeHash(string text) pure returns (bytes32)",
+  "function computeRowHashes(string[] rows) pure returns (bytes32[])",
+  "function currentTime() view returns (uint256)",
+  "event ProviderRegistered(address indexed provider, string name, uint64 timestamp)",
+  "event DatasetRegistered(uint256 indexed datasetId, address indexed provider, string name, bytes32 rowsDigest, uint256 rowCount, uint64 dataTimestamp, uint64 timestamp)",
+  "event CorrectionSubmitted(uint256 indexed datasetId, uint256 indexed version, bytes32 rowsDigest, uint256 rowCount, uint64 dataTimestamp, string reason, uint64 timestamp)",
+  "event PriceSet(uint256 indexed datasetId, address indexed provider, uint256 price)",
+  "event Subscribed(uint256 indexed datasetId, address indexed subscriber, uint256 amount, uint256 providerShare, uint256 platformShare, uint256 accessUntil)",
+  "event Withdrawn(address indexed account, uint256 amount)"
+];
+const CATALOGUE_CAP = 80;
+
+/* ======================= tiny helpers ======================= */
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+function h(tag, props, ...kids) {
+  const e = document.createElement(tag);
+  if (props) for (const [k, v] of Object.entries(props)) {
+    if (v == null || v === false) continue;
+    if (k === 'class') e.className = v;
+    else if (k === 'text') e.textContent = v;
+    else if (k.startsWith('on')) e.addEventListener(k.slice(2), v);
+    else e.setAttribute(k, v === true ? '' : v);
+  }
+  for (const c of kids.flat(Infinity)) { if (c == null || c === false) continue; e.append(c.nodeType ? c : document.createTextNode(String(c))); }
+  return e;
+}
+const A = (href, text) => h('a', { href, target: '_blank', rel: 'noopener' }, text);
+const txLink = (hash, text) => A(`${ES}/tx/${hash}`, text || (short(hash, 10, 8) + ' ↗'));
+const addrLink = a => A(`${ES}/address/${a}`, short(a, 6, 4) + ' ↗');
+const blockLink = n => A(`${ES}/block/${n}`, '#' + Number(n).toLocaleString('en-US') + ' ↗');
+function short(s, a = 6, b = 4) { s = String(s); return s.length <= a + b + 1 ? s : s.slice(0, a) + '…' + s.slice(-b); }
+const eth = w => { try { return ethers.formatEther(w); } catch { return '?'; } };
+const ethFmt = w => { const s = eth(w); return s + ' ETH'; };
+const hashRow = r => ethers.keccak256(ethers.toUtf8Bytes(r));
+const num = x => Number(x);
+function fmtTime(sec) {
+  const d = new Date(Number(sec) * 1000);
+  return isNaN(d) ? '—' : d.toISOString().replace('T', ' ').replace(/\.\d+Z/, ' UTC');
+}
+function fmtDur(s) {
+  s = Number(s);
+  if (s === 86400) return '1 day';
+  if (s >= 86400 * 2 && s % 86400 === 0) return `${s / 86400} days`;
+  if (s >= 86400) return `${(s / 86400).toFixed(1).replace(/\.0$/, '')} days`;
+  if (s >= 3600) return `${(s / 3600).toFixed(1).replace(/\.0$/, '')} h`;
+  if (s >= 60) return `${Math.round(s / 60)} min`;
+  return `${s} s`;
+}
+function fmtLeft(sec) {
+  let s = Math.max(0, sec - Math.floor(Date.now() / 1000));
+  const d = Math.floor(s / 86400), hh = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60);
+  return d ? `${d}d ${hh}h` : hh ? `${hh}h ${m}m` : m ? `${m}m ${s % 60}s` : `${s}s`;
+}
+function errText(e) {
+  if (!e) return 'Unknown error';
+  const r = e.reason || e.revert?.args?.[0] || e.info?.error?.data?.message || e.info?.error?.message || e.shortMessage || e.message || String(e);
+  return String(r).replace(/^execution reverted:?\s*/i, '').replace(/^VM Exception while processing transaction: revert\s*/i, '').slice(0, 300) || 'Reverted';
+}
+const isRejected = e => e && (e.code === 'ACTION_REJECTED' || e.code === 4001 || e.info?.error?.code === 4001 || /user (rejected|denied)/i.test(e.message || ''));
+function flash(keys) {
+  requestAnimationFrame(() => (Array.isArray(keys) ? keys : [keys]).forEach(k => $$(`[data-flash="${k}"]`).forEach(el => { el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); })));
+}
+function flashSel(el) { if (!el) return; el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); }
+
+/* ======================= state ======================= */
+const S = {
+  eth: null, provider: null, cr: null, chainId: null, account: null,
+  P: null,                // contract parameters
+  datasets: [], mine: [], total: 0, providers: {}, expanded: new Set(),
+  me: { isProvider: false, name: '', registeredAt: 0, balance: 0n },
+};
+const ready = () => S.eth && S.cr && S.chainId === CHAIN_ID;
+
+/* ======================= row editor ======================= */
+function rowEditor(mount, { placeholder } = {}) {
+  const gutter = h('div', { class: 'gutter', 'aria-hidden': 'true' });
+  const ta = h('textarea', { spellcheck: 'false', wrap: 'off', placeholder: placeholder || '2026-01-05,ACME,101.25\n2026-01-06,ACME,102.10', 'aria-label': 'Rows, one per line' });
+  const count = h('span'), warn = h('span', { class: 'warn' });
+  mount.append(h('div', { class: 'rows' }, gutter, ta), h('div', { class: 'rows-foot' }, count, warn));
+  let raf = 0;
+  function lines() { return ta.value.split('\n').map(l => l.replace(/\r$/, '')); }
+  function getRows() { return lines().filter(l => l.trim() !== ''); }
+  function paint() {
+    const ls = ta.value === '' ? [] : lines(); let n = 0, spaced = 0; const frag = document.createDocumentFragment();
+    for (const l of ls) {
+      if (l.trim() === '') { frag.append(h('div', { class: 'skip', text: '  ·  ' + '(blank)' })); continue; }
+      n++; if (l !== l.trim()) spaced++;
+      const hx = hashRow(l);
+      frag.append(h('div', { class: 'on' }, String(n).padStart(3, '0') + '  ' + hx.slice(2, 8) + '…' + hx.slice(-4) + (l !== l.trim() ? ' ' : ''), l !== l.trim() ? h('span', { class: 'sp', text: '␣' }) : ''));
+    }
+    gutter.replaceChildren(frag);
+    gutter.scrollTop = ta.scrollTop;
+    const max = S.P ? S.P.MAX_ROWS : 500;
+    count.textContent = n ? `${n} row${n === 1 ? '' : 's'} · fingerprinted here, never uploaded` : 'Blank lines are skipped. Every other line is one row, exactly as typed.';
+    warn.textContent = n > max ? `Too many rows (max ${max})` : spaced ? `␣ ${spaced} row${spaced === 1 ? ' has' : 's have'} leading/trailing spaces — they change the hash` : '';
+    editor.onChange && editor.onChange();
+  }
+  ta.addEventListener('input', () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(paint); });
+  ta.addEventListener('scroll', () => { gutter.scrollTop = ta.scrollTop; });
+  const editor = { el: ta, getRows, setText(t) { ta.value = t; paint(); }, onChange: null, paint };
+  paint();
+  return editor;
+}
+const SAMPLE = '2026-01-05,ACME,101.25\n2026-01-05,GLOBEX,48.10\n2026-01-06,ACME,102.10\n2026-01-06,GLOBEX,47.95\n2026-01-07,ACME,100.80';
+const edV = rowEditor($('#vEditorMount')), edD = rowEditor($('#dEditorMount')), edC = rowEditor($('#cEditorMount'));
+
+/* ======================= wallet ======================= */
+function pickProvider() {
+  const w = window.ethereum; if (!w) return null;
+  return (w.providers && w.providers.find(p => p.isMetaMask)) || w;
+}
+function netChip() {
+  const n = $('#net');
+  if (!S.eth) { n.className = 'net'; n.textContent = 'No wallet'; }
+  else if (S.chainId === CHAIN_ID) { n.className = 'net ok'; n.textContent = 'Sepolia'; }
+  else { n.className = 'net bad'; n.textContent = 'Wrong network'; }
+  const b = $('#connect');
+  b.textContent = S.account ? short(S.account, 6, 4) : 'Connect wallet';
+  b.className = 'btn sm' + (S.account ? ' ghost' : '');
+  b.title = S.account || '';
+}
+function banner() {
+  const el = $('#banner'); el.replaceChildren();
+  if (!S.eth) {
+    el.append(h('div', { class: 'b red' }, h('div', null, h('span', null, 'No wallet found. This page talks to the blockchain only through a browser wallet such as MetaMask — there is no server behind it.'))));
+  } else if (S.chainId !== CHAIN_ID) {
+    el.append(h('div', { class: 'b red' }, h('div', null, h('span', null, 'Your wallet is on a different network. This registry lives on Sepolia (chain 11155111).'), h('button', { class: 'btn', onclick: switchChain }, 'Switch to Sepolia'))));
+  }
+}
+async function switchChain() {
+  try { await S.eth.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: CHAIN_HEX }] }); }
+  catch (e) {
+    if (e.code === 4902 || e.data?.originalError?.code === 4902) {
+      await S.eth.request({ method: 'wallet_addEthereumChain', params: [{ chainId: CHAIN_HEX, chainName: 'Sepolia', nativeCurrency: { name: 'Sepolia Ether', symbol: 'SepoliaETH', decimals: 18 }, rpcUrls: ['https://ethereum-sepolia-rpc.publicnode.com'], blockExplorerUrls: [ES] }] });
+    } else if (!isRejected(e)) console.error(e);
+  }
+}
+async function connect() {
+  if (!S.eth) { banner(); return false; }
+  try {
+    const a = await S.eth.request({ method: 'eth_requestAccounts' });
+    await onAccounts(a);
+  } catch (e) { if (!isRejected(e)) console.error(e); }
+  return !!S.account;
+}
+async function onAccounts(a) {
+  S.account = a && a[0] ? ethers.getAddress(a[0]) : null;
+  netChip();
+  if (S.account) { if (!$('#aAddr').value) $('#aAddr').value = S.account; if (!$('#sAddr').value) $('#sAddr').value = S.account; }
+  await refreshAll();
+}
+async function onChain(idHex) {
+  S.chainId = BigInt(idHex);
+  S.provider = new ethers.BrowserProvider(S.eth, 'any');
+  S.cr = new ethers.Contract(ADDR, ABI, S.provider);
+  netChip(); banner();
+  await refreshAll();
+}
+async function initWallet() {
+  S.eth = pickProvider(); netChip(); banner();
+  if (!S.eth) { renderAll(); return; }
+  S.eth.on?.('accountsChanged', a => onAccounts(a));
+  S.eth.on?.('chainChanged', id => onChain(id));
+  try {
+    const id = await S.eth.request({ method: 'eth_chainId' });
+    const accts = await S.eth.request({ method: 'eth_accounts' });
+    S.account = accts[0] ? ethers.getAddress(accts[0]) : null;
+    await onChain(id);
+  } catch (e) { console.error(e); }
+}
+async function ensureReady() {
+  if (!S.eth) { banner(); return false; }
+  if (S.chainId !== CHAIN_ID) { await switchChain(); if (S.chainId !== CHAIN_ID) return false; }
+  if (!S.account) { if (!await connect()) return false; }
+  return true;
+}
+async function writer() { const signer = await S.provider.getSigner(S.account); return new ethers.Contract(ADDR, ABI, signer); }
+
+/* ======================= data loading ======================= */
+async function loadParams() {
+  const c = S.cr;
+  const [MAX_ROWS, MAX_TEXT_LENGTH, SHARE, platformWallet, listingFee, accessDuration, onTimeWindow, backfillThreshold] =
+    await Promise.all([c.MAX_ROWS(), c.MAX_TEXT_LENGTH(), c.PROVIDER_SHARE_PERCENT(), c.platformWallet(), c.listingFee(), c.accessDuration(), c.onTimeWindow(), c.backfillThreshold()]);
+  S.P = { MAX_ROWS: num(MAX_ROWS), MAX_TEXT_LENGTH: num(MAX_TEXT_LENGTH), SHARE: num(SHARE), platformWallet, listingFee, accessDuration: num(accessDuration), onTimeWindow: num(onTimeWindow), backfillThreshold: num(backfillThreshold) };
+}
+async function loadProvider(addr) {
+  if (S.providers[addr]) return S.providers[addr];
+  const p = await S.cr.providers(addr);
+  return (S.providers[addr] = { name: p.exists ? p.name : '', exists: p.exists, registeredAt: num(p.registeredAt) });
+}
+async function loadCatalogue() {
+  const c = S.cr; const total = num(await c.datasetCount()); S.total = total;
+  const ids = []; for (let i = total; i >= 1 && ids.length < CATALOGUE_CAP; i--) ids.push(i);
+  const loadDs = async id => {
+    const [d, price, expiry] = await Promise.all([c.datasets(id), c.prices(id), S.account ? c.accessExpiry(S.account, id) : 0n]);
+    return { id, provider: d.provider, name: d.name, createdAt: num(d.createdAt), latest: num(d.latestVersion), price, expiry: num(expiry) };
+  };
+  const out = [];
+  for (let i = 0; i < ids.length; i += 16) out.push(...await Promise.all(ids.slice(i, i + 16).map(loadDs)));
+  // A vendor's own datasets are looked up by their own id list, so the catalogue cap never hides them.
+  let mine = [];
+  if (S.account) {
+    const ownIds = (await c.getProviderDatasetIds(S.account)).map(num).sort((a, b) => b - a);
+    const have = new Map(out.map(d => [d.id, d]));
+    const missing = ownIds.filter(id => !have.has(id));
+    const extra = new Map();
+    for (let i = 0; i < missing.length; i += 16) (await Promise.all(missing.slice(i, i + 16).map(loadDs))).forEach(d => extra.set(d.id, d));
+    mine = ownIds.map(id => have.get(id) || extra.get(id));
+  }
+  await Promise.all([...new Set(out.concat(mine).map(d => d.provider))].map(loadProvider));
+  S.datasets = out; S.mine = mine;
+}
+const findDs = id => S.datasets.find(d => d.id === Number(id)) || S.mine.find(d => d.id === Number(id));
+async function loadMe() {
+  S.me = { isProvider: false, name: '', registeredAt: 0, balance: 0n };
+  if (!S.account || !ready()) return;
+  const [p, bal] = await Promise.all([S.cr.providers(S.account), S.cr.balances(S.account)]);
+  S.me = { isProvider: p.exists, name: p.name, registeredAt: num(p.registeredAt), balance: bal };
+  S.providers[S.account] = { name: p.exists ? p.name : '', exists: p.exists, registeredAt: num(p.registeredAt) };
+}
+let refreshing = null;
+async function refreshAll() {
+  if (refreshing) { await refreshing; }
+  refreshing = (async () => {
+    if (!ready()) { S.datasets = []; S.mine = []; S.P = null; S.me = { isProvider: false, name: '', registeredAt: 0, balance: 0n }; renderAll(); return; }
+    try { await Promise.all([loadParams(), loadMe()]); await loadCatalogue(); }
+    catch (e) { console.error(e); $('#ledgerNote').textContent = 'Could not read the contract: ' + errText(e); }
+    renderAll();
+  })();
+  try { await refreshing; } finally { refreshing = null; }
+}
+
+/* ======================= rendering ======================= */
+function renderAll() {
+  const role = document.body.dataset.role;
+  renderParams(); renderSelects();
+  if (role === 'subscriber') renderCatalogue();
+  if (role === 'vendor') { renderMine(); renderMyScore(); }
+  renderDesk(); renderAccount();
+}
+function renderMine() {
+  const body = $('#myBody'); body.replaceChildren();
+  if (!ready()) { body.append(h('div', { class: 'empty-note' }, S.eth ? 'Switch to Sepolia to see your datasets.' : 'Install a wallet to publish data.')); return; }
+  if (!S.account) { body.append(h('div', { class: 'empty-note' }, 'Connect your wallet to see your datasets. ', h('button', { class: 'linkbtn', onclick: connect }, 'Connect'))); return; }
+  const mine = S.mine;
+  if (!mine.length) { body.append(h('div', { class: 'empty-note' }, S.me.isProvider ? 'You haven’t registered a dataset yet. Use the form above.' : 'Register as a provider above to publish your first dataset.')); return; }
+  mine.forEach(d => body.append(catRow(d, 'ven')));
+}
+let scoreSeq = 0;
+async function renderMyScore() {
+  const el = $('#myScore'); const seq = ++scoreSeq;
+  if (!ready() || !S.account || !S.me.isProvider) { el.replaceChildren(h('div', { class: 'fine', style: 'margin:0' }, 'Your track record appears here once you have registered data.')); return; }
+  try { const sc = await S.cr.getScorecard(S.account); if (seq === scoreSeq) el.replaceChildren(scorecardEl(sc)); }
+  catch (e) { if (seq === scoreSeq) el.replaceChildren(h('div', { class: 'fine' }, errText(e))); }
+}
+function setRole(r) {
+  document.body.dataset.role = r;
+  try { localStorage.setItem('registry-role', r); } catch {}
+  $$('.seg button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.pick === r)));
+  renderAll();
+  window.scrollTo({ top: 0 });
+}
+$$('[data-pick]').forEach(b => b.addEventListener('click', () => setRole(b.dataset.pick)));
+
+function renderParams() {
+  const P = S.P, t = $('#params');
+  $('#esCode').href = `${ES}/address/${ADDR}#code`; $('#esRead').href = `${ES}/address/${ADDR}#readContract`;
+  $('#esFoot').href = `${ES}/address/${ADDR}`; $('#esFoot').textContent = 'View the contract on Etherscan ↗';
+  document.querySelectorAll('.maxrows').forEach(e => e.textContent = P ? P.MAX_ROWS : 500);
+  if (!P) { t.replaceChildren(h('tr', null, h('td', { colspan: 2, class: 'muted' }, 'Connect a wallet on Sepolia to read them.'))); return; }
+  $('#creedSplit').textContent = `${P.SHARE} / ${100 - P.SHARE}`;
+  $$('.shareText').forEach(e => e.textContent = P.SHARE + '%');
+  const row = (k, v) => h('tr', null, h('td', null, k), h('td', null, v));
+  t.replaceChildren(
+    row('Provider share of each payment', `${P.SHARE}%`),
+    row('Platform share', `${100 - P.SHARE}%`),
+    row('Platform wallet', addrLink(P.platformWallet)),
+    row('Provider listing fee', P.listingFee === 0n ? 'free' : ethFmt(P.listingFee)),
+    row('One subscription buys', fmtDur(P.accessDuration)),
+    row('“On time” if registered within', fmtDur(P.onTimeWindow)),
+    row('“Backfilled” if registered after', fmtDur(P.backfillThreshold)),
+  );
+}
+
+function renderSelects() {
+  const opts = S.datasets.map(d => h('option', { value: d.id }, `№ ${d.id} — ${d.name} · ${S.providers[d.provider]?.name || short(d.provider)}`));
+  const keepV = $('#vSel').value;
+  $('#vSel').replaceChildren(...(opts.length ? opts : [h('option', { value: '' }, ready() ? 'No datasets registered yet' : 'Connect to a Sepolia wallet to load datasets…')]));
+  if (keepV && S.datasets.some(d => String(d.id) === keepV)) $('#vSel').value = keepV;
+  const mine = S.mine;
+  const keepC = $('#cSel').value;
+  $('#cSel').replaceChildren(...(mine.length ? mine.map(d => h('option', { value: d.id }, `№ ${d.id} — ${d.name} (now v${d.latest})`)) : [h('option', { value: '' }, 'You have no datasets yet')]));
+  if (keepC && mine.some(d => String(d.id) === keepC)) $('#cSel').value = keepC;
+  updateCNote();
+}
+function updateCNote() {
+  const d = findDs($('#cSel').value);
+  $('#cNote').replaceChildren(d ? h('span', null, 'This will append ', h('strong', null, `version ${d.latest + 1}`), `. Versions 1–${d.latest} stay on the record exactly as they are, and anyone can see this reason next to the change.`) : 'Pick a dataset.');
+}
+$('#cSel').addEventListener('change', updateCNote);
+
+/* ---- catalogue ---- */
+function accessCell(d) {
+  const has = d.expiry > Math.floor(Date.now() / 1000);
+  return has;
+}
+function renderCatalogue() {
+  const body = $('#ledgerBody'); body.replaceChildren();
+  const note = $('#ledgerNote');
+  if (!ready()) { body.append(h('div', { class: 'empty-note' }, S.eth ? 'Switch to Sepolia to read the registry.' : 'Install a wallet to read the registry.')); note.textContent = ''; return; }
+  if (!S.datasets.length) { body.append(h('div', { class: 'empty-note' }, 'Nothing has been registered yet. The first provider to register a dataset will appear here.')); note.textContent = ''; return; }
+  note.textContent = S.total > S.datasets.length ? `Showing the newest ${S.datasets.length} of ${S.total} datasets.` : `${S.total} dataset${S.total === 1 ? '' : 's'} registered.`;
+  for (const d of S.datasets) body.append(catRow(d, 'sub'));
+}
+function catRow(d, mode) {
+  const vend = mode === 'ven';
+  const mine = S.account && d.provider.toLowerCase() === S.account.toLowerCase();
+  const has = accessCell(d);
+  const open = S.expanded.has(d.id);
+  const row = h('article', { class: 'lrow' + (open ? ' open' : ''), 'data-id': d.id, 'data-flash': 'ds-' + d.id });
+  let act;
+  if (vend) {
+    act = h('div', { class: 'act' }, d.price > 0n ? h('span', { class: 'chip g', style: 'margin:0' }, 'On sale') : h('span', { class: 'muted fine', style: 'margin:0' }, 'Not for sale'));
+  } else {
+    const subBtn = d.price > 0n ? h('button', { class: 'btn sm', onclick: e => subscribe(d.id, e.currentTarget) }, has ? 'Extend' : 'Subscribe') : null;
+    act = h('div', { class: 'act' },
+      has ? h('div', { style: 'margin-bottom:6px' }, h('span', { class: 'chip g', style: 'margin:0' }, 'Access'), ' ', h('span', { class: 'fine', style: 'margin:0' }, fmtLeft(d.expiry) + ' left')) : null,
+      subBtn || (has ? null : h('span', { class: 'muted fine', style: 'margin:0' }, 'Not for sale')));
+  }
+  const chev = h('button', { class: 'chev', 'aria-label': 'Toggle details', 'aria-expanded': String(open), onclick: () => toggle(d.id, mode) }, '▾');
+  row.append(h('div', { class: 'lrow-main' },
+    h('div', { class: 'no' }, d.id),
+    h('div', { class: 'tt' }, h('div', { class: 'ttl' }, d.name, !vend && mine ? h('span', { class: 'tag you' }, 'yours') : null),
+      h('div', { class: 'by' }, vend ? `Registered ${fmtTime(d.createdAt).slice(0, 10)}` : ['by ', S.providers[d.provider]?.name || short(d.provider), ' · registered ', fmtTime(d.createdAt).slice(0, 10)])),
+    h('div', { class: 'meta' },
+      h('div', { class: 'vers mono' }, 'v' + d.latest),
+      h('div', { class: 'price' }, d.price > 0n ? ethFmt(d.price) : '—'),
+      act),
+    chev));
+  if (open) { const det = h('div', { class: 'lrow-detail' }); row.append(det); fillDetail(d, det, mode); }
+  return row;
+}
+function toggle(id, mode) {
+  if (S.expanded.has(id)) S.expanded.delete(id); else S.expanded.add(id);
+  const box = $(mode === 'ven' ? '#myBody' : '#ledgerBody');
+  const old = $(`.lrow[data-id="${id}"]`, box); const d = findDs(id);
+  if (old && d) old.replaceWith(catRow(d, mode));
+}
+function chipsFor(r) {
+  const gap = num(r.timestamp) - num(r.dataTimestamp);
+  const out = [];
+  if (r.isBackfilled) out.push(h('span', { class: 'chip r' }, 'backfilled'));
+  else if (S.P && gap <= S.P.onTimeWindow) out.push(h('span', { class: 'chip g' }, 'on time'));
+  else out.push(h('span', { class: 'chip o' }, 'late'));
+  return out;
+}
+async function fillDetail(d, det, mode) {
+  det.append(h('div', { class: 'muted' }, 'Reading history from the chain…'));
+  try {
+    const vs = []; for (let v = d.latest; v >= 1 && vs.length < 25; v--) vs.push(v);
+    const [recs, sc] = await Promise.all([Promise.all(vs.map(v => S.cr.getRecord(d.id, v))), S.cr.getScorecard(d.provider)]);
+    const tl = h('ol', { class: 'tl' });
+    recs.forEach((r, i) => {
+      const v = num(r.version);
+      tl.append(h('li', { class: i === 0 ? 'latest' : '' },
+        h('div', { class: 'v' }, v === 1 ? 'v1 · Original' : `v${v} · Correction of v${num(r.previousVersion)}`, i === 0 ? h('span', { class: 'chip g' }, 'current') : null, chipsFor(r)),
+        r.note ? h('div', { class: 'n' }, v === 1 ? '' : 'Reason: ', r.note) : h('div', { class: 'n muted' }, v === 1 ? 'No note.' : ''),
+        h('div', { class: 'meta' },
+          `${r.rowHashes.length} rows`, v > 1 ? ` · ${num(r.changePercent)}% changed vs v${num(r.previousVersion)}` : '', h('br'),
+          'Recorded ', fmtTime(r.timestamp), ' · block ', blockLink(r.blockNumber), h('br'),
+          'Provider says data is from ', fmtTime(r.dataTimestamp), ' (unverified)')));
+    });
+    const vend = mode === 'ven';
+    const pP = BigInt(S.P.SHARE), shareProv = d.price * pP / 100n, shareAll = d.price - shareProv;
+    const salePanel = d.price > 0n ? h('div', { class: 'panel' }, h('h4', null, vend ? 'Each subscription' : 'If you subscribe'),
+      vend ? h('div', null, h('strong', null, ethFmt(shareProv)), ` to you from every ${ethFmt(d.price)} payment (${S.P.SHARE}%).`)
+           : h('div', null, h('strong', null, ethFmt(d.price)), ` buys ${fmtDur(S.P.accessDuration)} of access.`),
+      h('div', { class: 'split' }, h('i'), h('i')),
+      h('div', { class: 'fine', style: 'margin:0' }, vend ? `${ethFmt(shareAll)} goes to the platform. The split is fixed in code; your share waits in your balance until you withdraw.`
+        : `${ethFmt(shareProv)} to the vendor · ${ethFmt(shareAll)} to the platform. Split in code, at payment time. No refunds.`)) : null;
+    const side = vend
+      ? h('div', null, salePanel,
+          h('div', { class: 'panel' }, h('h4', null, 'Manage'),
+            h('div', { style: 'display:flex;gap:8px;flex-wrap:wrap' }, h('button', { class: 'btn sm ghost', onclick: () => { selectTab('fix'); $('#cSel').value = d.id; updateCNote(); location.hash = '#desk'; } }, 'Add a correction')),
+            priceForm(d)))
+      : h('div', null,
+          h('div', { class: 'panel' }, h('h4', null, 'Vendor track record'), scorecardEl(sc), h('div', { class: 'fine' }, 'Vendor ', addrLink(d.provider), '. Based on the vendor’s own declared dates: it shows consistency, not independent proof of timeliness.')),
+          salePanel,
+          h('div', { class: 'panel' }, h('h4', null, 'Have a copy?'),
+            h('button', { class: 'btn sm ghost', onclick: () => { $('#vSel').value = d.id; location.hash = '#verify'; $('#vEditorMount textarea').focus({ preventScroll: true }); } }, 'Verify it against this dataset')));
+    det.replaceChildren(h('div', null, h('div', { class: 'label', style: 'margin-bottom:14px' }, `Version history · ${d.latest} version${d.latest === 1 ? '' : 's'} · nothing is ever edited`), tl, d.latest > vs.length ? h('div', { class: 'fine' }, `Showing the newest ${vs.length} versions.`) : null), side);
+  } catch (e) { det.replaceChildren(h('div', { class: 'callout red' }, 'Could not read this dataset: ' + errText(e))); }
+}
+function priceForm(d) {
+  const inp = h('input', { class: 'mono', placeholder: d.price > 0n ? eth(d.price) : '0.01', autocomplete: 'off', inputmode: 'decimal', style: 'width:100%;background:transparent;border:0;border-bottom:2px solid var(--ink);padding:6px 2px;outline:0' });
+  const wei = h('div', { class: 'fine', style: 'margin:4px 0 8px' }, 'Price per period in ETH. 0 takes it off sale.');
+  inp.addEventListener('input', () => { try { wei.textContent = inp.value.trim() ? `= ${ethers.parseEther(inp.value.trim()).toString()} wei` : 'Price per period in ETH. 0 takes it off sale.'; } catch { wei.textContent = 'Not a valid amount'; } });
+  const btn = h('button', { class: 'btn sm', onclick: e => {
+    let v; try { v = ethers.parseEther(inp.value.trim() || 'x'); } catch { wei.textContent = 'Enter a valid ETH amount, e.g. 0.01'; return; }
+    runTx({ fn: 'setPrice', args: [d.id, v], btn: e.currentTarget, label: 'Set price', callText: `datasetId: ${d.id}, price: ${v} wei (${eth(v)} ETH)`, done: () => ({ headline: v === 0n ? `Dataset № ${d.id} taken off sale` : `Dataset № ${d.id} now ${eth(v)} ETH per period`, flash: ['ds-' + d.id] }) });
+  } }, 'Set price');
+  return h('div', { style: 'margin-top:14px;padding-top:12px;border-top:1px solid var(--ink)' }, h('div', { class: 'label' }, 'Your price'), inp, wei, btn);
+}
+function scorecardEl(sc) {
+  const none = sc.grade === 'N/A';
+  const g = sc.grade;
+  const m = (label, pct, text) => h('div', { class: 'meter' }, h('span', null, h('span', null, label), h('b', null, text)), h('div', { class: 'bar' }, h('i', { style: `width:${Math.min(100, pct)}%` })));
+  return h('div', null,
+    h('div', { class: 'grade' }, h('div', { class: 'g ' + (none ? '' : g) }, none ? '—' : g),
+      h('div', { class: 'fine', style: 'margin:0' }, none ? 'No records yet.' : `${num(sc.datasetCount)} dataset${num(sc.datasetCount) === 1 ? '' : 's'}, ${num(sc.recordCount)} record${num(sc.recordCount) === 1 ? '' : 's'}. A = ≥95% on time and nothing backfilled · B = ≥80% on time · C = below.`)),
+    none ? null : [m('Registered on time', num(sc.onTimePercent), num(sc.onTimePercent) + '%'), m('Records that are corrections', num(sc.correctionRatePercent), num(sc.correctionRatePercent) + '%'), m('Average size of a correction', num(sc.avgChangePercent), num(sc.avgChangePercent) + '% of rows changed'), h('div', { class: 'fine' }, `${num(sc.backfilledCount)} backfilled record${num(sc.backfilledCount) === 1 ? '' : 's'}`)]);
+}
+
+/* ---- provider desk ---- */
+function renderDesk() {
+  const st = $('#deskStatus'); st.replaceChildren();
+  const gR = $('#gateRegister'), gF = $('#gateForms');
+  gR.classList.add('hide'); gF.classList.add('hide');
+  if (!ready()) { st.append(h('span', null, S.eth ? 'Switch to Sepolia to use the provider desk.' : 'A wallet is required to register data.')); return; }
+  if (!S.account) { st.append(h('span', null, 'Connect your wallet to register data.'), h('button', { class: 'btn sm', onclick: connect }, 'Connect')); return; }
+  if (S.me.isProvider) {
+    st.append(h('span', { class: 'chip g', style: 'margin:0' }, 'Registered provider'), h('strong', null, S.me.name), h('span', { class: 'muted' }, 'since ' + fmtTime(S.me.registeredAt).slice(0, 10)));
+    gF.classList.remove('hide');
+  } else {
+    st.append(h('span', null, 'This address is not a provider yet.'));
+    $('#feeText').textContent = S.P.listingFee === 0n ? 'free' : ethFmt(S.P.listingFee);
+    $('#pGo').textContent = S.P.listingFee === 0n ? 'Register as provider' : `Register — pay ${ethFmt(S.P.listingFee)}`;
+    gR.classList.remove('hide');
+  }
+}
+function selectTab(t) {
+  $$('.tabs button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === t)));
+  $('#tabNew').classList.toggle('hide', t !== 'new'); $('#tabFix').classList.toggle('hide', t !== 'fix');
+}
+$$('.tabs button').forEach(b => b.addEventListener('click', () => selectTab(b.dataset.tab)));
+function nowLocalInput() { const d = new Date(Date.now() - 60000); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 16); }
+$('#dDate').value = nowLocalInput(); $('#cDate').value = nowLocalInput();
+
+/* ---- account ---- */
+function renderAccount() {
+  const bal = $('#balance'), note = $('#balNote'), wGo = $('#wGo'), subs = $('#subs');
+  subs.replaceChildren();
+  if (!ready() || !S.account) {
+    bal.replaceChildren('—', h('small', null, ' ETH')); wGo.disabled = true;
+    note.textContent = !S.account && ready() ? 'Connect a wallet to see your balance.' : 'Connect a wallet on Sepolia.';
+    subs.append(h('li', { class: 'muted' }, '—')); return;
+  }
+  bal.replaceChildren(eth(S.me.balance), h('small', null, ' ETH'));
+  wGo.disabled = S.me.balance === 0n;
+  const isPlat = S.P && S.account.toLowerCase() === S.P.platformWallet.toLowerCase();
+  note.textContent = S.me.balance === 0n ? 'Nothing waiting for this address.' : isPlat ? 'You are the platform wallet: this includes listing fees and the platform’s share of every subscription.' : 'Credited from subscriptions to your datasets. Withdrawing sends the full balance.';
+  const now = Math.floor(Date.now() / 1000);
+  const act = S.datasets.filter(d => d.expiry > now);
+  if (!act.length) subs.append(h('li', { class: 'muted' }, 'None active.'));
+  act.forEach(d => subs.append(h('li', null, h('span', null, `№ ${d.id} — ${d.name}`), h('span', { class: 'mono' }, fmtLeft(d.expiry) + ' left'))));
+}
+
+/* ======================= transactions: the docket ======================= */
+const docket = $('#docket');
+const FN_LABEL = { registerProvider: 'Register as provider', registerDataset: 'Register dataset', submitCorrection: 'Submit correction', setPrice: 'Set price', subscribe: 'Subscribe', withdraw: 'Withdraw', check: 'Check your input' };
+function humanSummary(o) {
+  const dsName = id => (findDs(id) || {}).name;
+  const a = o.args || [];
+  switch (o.fn) {
+    case 'registerProvider': return `${a[0]}${o.value > 0n ? ' · fee ' + ethFmt(o.value) : ''}`;
+    case 'registerDataset': return `${a[0]} · ${a[1].length} row${a[1].length === 1 ? '' : 's'}`;
+    case 'submitCorrection': return `${dsName(a[0]) || 'Dataset № ' + a[0]} · ${a[1].length} row${a[1].length === 1 ? '' : 's'}`;
+    case 'setPrice': return `${dsName(a[0]) || 'Dataset № ' + a[0]} · ${a[1] === 0n ? 'off sale' : ethFmt(a[1])}`;
+    case 'subscribe': return `${dsName(a[0]) || 'Dataset № ' + a[0]} · ${ethFmt(o.value)}`;
+    case 'withdraw': return ethFmt(S.me.balance);
+    default: return '';
+  }
+}
+function mkSlip(fn, callText) {
+  const el = h('div', { class: 'slip', 'data-state': 'preflight' });
+  const st = h('span', { class: 'st' }), x = h('button', { class: 'x', 'aria-label': 'Dismiss', onclick: () => { clearInterval(el._t); el.remove(); } }, '×');
+  const call = h('div', { class: 'call', text: callText });
+  const sb = h('div', { class: 'sb' }), ml = h('div', { class: 'ml' });
+  const top = h('div', { class: 'slip-top', title: 'Click to expand or collapse' }, h('span', { class: 'fn', text: FN_LABEL[fn] || fn }), st, x);
+  top.addEventListener('click', ev => { if (ev.target !== x && el._done) el.classList.toggle('mini'); });
+  el.append(top, call, sb, ml);
+  // anything already finished has been seen: fold it to one line so the new slip has the room
+  $$('.slip', docket).forEach(s => { if (s._done) s.classList.add('mini'); });
+  docket.prepend(el);
+  const TERMINAL = ['confirmed', 'rejected', 'blocked', 'reverted', 'cancelled'];
+  return {
+    el,
+    set(state, label, ...kids) {
+      el.dataset.state = state; st.textContent = label; sb.replaceChildren(...kids.flat().filter(Boolean));
+      if (TERMINAL.includes(state)) {
+        el._done = true;
+        if (state === 'confirmed') setTimeout(() => el.classList.add('mini'), 9000);
+        else if (state !== 'reverted') setTimeout(() => el.remove(), 14000);
+      }
+    },
+    summary(...kids) { ml.replaceChildren(...kids.flat().filter(Boolean)); },
+  };
+}
+async function runTx(o) {
+  const btn = o.btn, orig = btn ? btn.textContent : '';
+  const setBtn = (t) => { if (!btn) return; if (t) { btn.dataset.busy = '1'; btn.disabled = true; btn.textContent = t; } else { delete btn.dataset.busy; btn.disabled = false; btn.textContent = orig; } };
+  if (!await ensureReady()) return;
+  const slip = mkSlip(o.fn, humanSummary(o));
+  const ov = o.value != null ? { value: o.value } : {};
+  let c, timer;
+  const valueLine = o.value != null && o.value > 0n ? h('div', { class: 'call', style: 'padding:0' }, `Amount: ${ethFmt(o.value)}`) : null;
+  try {
+    setBtn('Checking…');
+    slip.set('preflight', 'Checking', h('div', null, 'Dry run against the contract. No gas, no signature.'), h('div', { class: 'inkline' }));
+    c = await writer();
+    try { await c.getFunction(o.fn).staticCall(...o.args, ov); }
+    catch (e) {
+      if (isRejected(e)) throw e;
+      if (e.code === 'CALL_EXCEPTION' || e.reason || e.revert) { slip.set('blocked', 'Refused', h('div', null, h('strong', { style: 'color:var(--red)' }, errText(e))), h('div', { class: 'fine', style: 'margin:0' }, 'Caught before signing — nothing was sent and no gas was spent.')); setBtn(null); return; }
+      console.warn('preflight inconclusive', e);
+    }
+    setBtn('Sign in wallet…');
+    slip.set('signing', 'Awaiting signature', h('div', { class: 'sign-row' }, h('div', { class: 'wax' }), h('div', null, h('strong', { style: 'color:var(--ink)' }, 'Confirm in your wallet.'), h('div', null, 'Review the details in your wallet. Nothing is sent until you approve.'))), valueLine);
+    const tx = await c[o.fn](...o.args, ov);
+    // ---- pending ----
+    setBtn('Mining…');
+    const t0 = Date.now(); const tm = h('span', { class: 'tm' }, '0:00'); const slow = h('div', { class: 'fine hide', style: 'margin:0' }, 'Slower than usual — Sepolia is sometimes congested. Your transaction is still valid; you can leave this page and it will confirm on its own.');
+    slip.set('pending', 'Mining', h('div', { class: 'pend-row' }, h('span', null, 'Broadcast. Waiting for a block.'), tm), h('div', { class: 'inkline' }), h('div', { class: 'pend-row' }, txLink(tx.hash, 'View on Etherscan ↗'), h('span', { class: 'muted' }, 'Can take seconds to a minute')), slow);
+    timer = setInterval(() => { const s = Math.floor((Date.now() - t0) / 1000); tm.textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; if (s > 45) slow.classList.remove('hide'); }, 500);
+    slip.el._t = timer;
+    let receipt, hash = tx.hash;
+    try { receipt = await tx.wait(); }
+    catch (e) {
+      if (e.code === 'TRANSACTION_REPLACED') {
+        if (e.cancelled) { clearInterval(timer); slip.set('cancelled', 'Replaced', h('div', null, 'This transaction was cancelled by a replacement. Nothing changed.'), txLink(e.replacement.hash)); setBtn(null); return; }
+        receipt = e.receipt; hash = e.replacement.hash;
+      } else if (e.receipt) {
+        clearInterval(timer);
+        slip.set('reverted', 'Reverted', h('div', null, h('strong', { style: 'color:var(--red)' }, 'The contract rejected it on-chain.'), ' Included in block ', blockLink(e.receipt.blockNumber), '. Gas was spent; nothing else changed.'), txLink(tx.hash, 'View on Etherscan ↗'));
+        setBtn(null); return;
+      } else throw e;
+    }
+    clearInterval(timer);
+    if (receipt.status !== 1) { slip.set('reverted', 'Reverted', h('div', null, 'The contract rejected it on-chain.'), txLink(hash, 'View on Etherscan ↗')); setBtn(null); return; }
+    // ---- confirmed ----
+    let ts = null; try { ts = (await S.provider.getBlock(receipt.blockNumber)).timestamp; } catch {}
+    const res = (o.done && o.done(receipt, c)) || {};
+    slip.set('confirmed', 'Entered', h('div', { class: 'conf-row' }, h('div', { class: 'seal' }, h('span', null, 'ENTERED', h('br'), 'ON-CHAIN')), h('div', null, h('div', { class: 'big' }, res.headline || 'Confirmed'), h('div', { class: 'fine', style: 'margin:3px 0 0' }, 'Block ', blockLink(receipt.blockNumber), ts ? ' · ' + fmtTime(ts) : ''))), h('div', { class: 'pend-row' }, txLink(hash, 'View on Etherscan ↗'), h('span')));
+    slip.summary(res.headline || 'Confirmed', ' · ', txLink(hash, 'Etherscan ↗'));
+    setBtn(null);
+    S.providers = {}; // names may have changed
+    await refreshAll();
+    if (res.flash) flash(res.flash);
+    if (o.after) o.after(receipt);
+  } catch (e) {
+    clearInterval(timer);
+    setBtn(null);
+    if (isRejected(e)) slip.set('rejected', 'Declined', h('div', null, 'You declined in your wallet. Nothing was sent, no gas spent.'));
+    else slip.set('reverted', 'Failed', h('div', null, h('strong', { style: 'color:var(--red)' }, errText(e))));
+  }
+}
+function parseEvent(c, receipt, name) {
+  for (const l of receipt.logs) { try { const p = c.interface.parseLog(l); if (p && p.name === name) return p; } catch {} }
+  return null;
+}
+
+/* ======================= actions ======================= */
+async function chainNow() { try { return num(await S.cr.currentTime()); } catch { return Math.floor(Date.now() / 1000); } }
+async function readDate(inputEl) {
+  const v = inputEl.value; if (!v) throw new Error('Pick a declared data date.');
+  let ts = Math.floor(new Date(v).getTime() / 1000); if (!Number.isFinite(ts)) throw new Error('That date is not valid.');
+  const now = await chainNow();
+  if (ts > now) { if (ts - now <= 300) ts = now; else throw new Error('The declared data date is in the future. Data cannot be from a moment that has not happened.'); }
+  return ts;
+}
+function checkText(s, what, min) {
+  const n = new TextEncoder().encode(s).length; const max = S.P ? S.P.MAX_TEXT_LENGTH : 280;
+  if (n < min) throw new Error(`${what} cannot be empty.`);
+  if (n > max) throw new Error(`${what} is too long (${n} bytes, max ${max}).`);
+}
+function localError(el, msg) {
+  const slip = mkSlip('check', ''); slip.set('blocked', 'Check input', h('div', null, h('strong', { style: 'color:var(--red)' }, msg)));
+  setTimeout(() => slip.el.remove(), 7000);
+}
+
+$('#connect').addEventListener('click', () => { if (S.eth && S.chainId !== CHAIN_ID) switchChain(); else connect(); });
+
+$('#pGo').addEventListener('click', e => {
+  const name = $('#pName').value.trim();
+  try { if (!ready()) { ensureReady(); return; } checkText(name, 'Provider name', 1); } catch (er) { return localError(null, er.message); }
+  runTx({ fn: 'registerProvider', args: [name], value: S.P.listingFee, btn: e.currentTarget, callText: `name: ${JSON.stringify(name)}`, done: () => ({ headline: `${name} is now a registered provider`, flash: ['desk'] }) });
+});
+
+$('#dGo').addEventListener('click', async e => {
+  const btn = e.currentTarget;
+  try {
+    if (!await ensureReady()) return;
+    const name = $('#dName').value.trim(), note = $('#dNote').value.trim(); checkText(name, 'Dataset name', 1); checkText(note, 'Note', 0);
+    const rows = edD.getRows(); if (!rows.length) throw new Error('Add at least one row.'); if (rows.length > S.P.MAX_ROWS) throw new Error(`Too many rows: at most ${S.P.MAX_ROWS}.`);
+    const hashes = rows.map(hashRow), ts = await readDate($('#dDate'));
+    runTx({ fn: 'registerDataset', args: [name, hashes, ts, note], btn, callText: `name: ${JSON.stringify(name)}, rowHashes: [${rows.length} hashes], dataTimestamp: ${ts}, note: ${JSON.stringify(note)}`,
+      done: (r, c) => { const ev = parseEvent(c, r, 'DatasetRegistered'); const id = ev ? num(ev.args.datasetId) : null; if (id) S.expanded.add(id); return { headline: id ? `Dataset № ${id} registered · ${rows.length} fingerprints` : 'Dataset registered', flash: id ? ['ds-' + id] : [] }; },
+      after: () => { edD.setText(''); $('#dName').value = ''; $('#dNote').value = ''; $('#dDate').value = nowLocalInput(); setTimeout(() => $('#mine').scrollIntoView({ behavior: 'smooth' }), 700); } });
+  } catch (er) { localError(null, er.message); }
+});
+
+$('#cGo').addEventListener('click', async e => {
+  const btn = e.currentTarget;
+  try {
+    if (!await ensureReady()) return;
+    const id = Number($('#cSel').value); if (!id) throw new Error('Pick one of your datasets.');
+    const reason = $('#cReason').value.trim(); checkText(reason, 'Reason', 1);
+    const rows = edC.getRows(); if (!rows.length) throw new Error('Add the corrected rows.'); if (rows.length > S.P.MAX_ROWS) throw new Error(`Too many rows: at most ${S.P.MAX_ROWS}.`);
+    const hashes = rows.map(hashRow), ts = await readDate($('#cDate'));
+    runTx({ fn: 'submitCorrection', args: [id, hashes, ts, reason], btn, callText: `datasetId: ${id}, newRowHashes: [${rows.length} hashes], dataTimestamp: ${ts}, reason: ${JSON.stringify(reason)}`,
+      done: () => { S.expanded.add(id); return { headline: `Dataset № ${id}: a new version was appended`, flash: ['ds-' + id] }; },
+      after: () => { edC.setText(''); $('#cReason').value = ''; setTimeout(() => $(`#myBody .lrow[data-id="${id}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 700); } });
+  } catch (er) { localError(null, er.message); }
+});
+
+async function subscribe(id, btn) {
+  if (!await ensureReady()) return;
+  let price;
+  try { price = await S.cr.prices(id); } catch (e) { return localError(null, errText(e)); }
+  if (price === 0n) return localError(null, 'This dataset is no longer for sale.');
+  runTx({ fn: 'subscribe', args: [id], value: price, btn, callText: `datasetId: ${id}`, done: r => { const ev = parseEvent(new ethers.Contract(ADDR, ABI), r, 'Subscribed'); return { headline: ev ? `Access to № ${id} until ${fmtTime(ev.args.accessUntil).slice(0, 16)} UTC` : `Subscribed to № ${id}`, flash: ['ds-' + id, 'balance'] }; } });
+}
+
+$('#wGo').addEventListener('click', e => {
+  const bal = S.me.balance;
+  runTx({ fn: 'withdraw', args: [], btn: e.currentTarget, callText: '', done: () => ({ headline: `${ethFmt(bal)} sent to your wallet`, flash: ['balance'] }) });
+});
+
+$('#aGo').addEventListener('click', async () => {
+  const out = $('#aOut'); out.replaceChildren();
+  if (!ready()) return out.append(h('span', { class: 'muted' }, 'Connect to Sepolia first.'));
+  try {
+    const a = ethers.getAddress($('#aAddr').value.trim()), id = BigInt($('#aId').value || '0');
+    if (id < 1n) throw new Error('Enter a dataset number.');
+    const [has, exp] = await Promise.all([S.cr.hasAccess(a, id), S.cr.accessExpiry(a, id)]);
+    out.append(has ? h('span', null, h('span', { class: 'chip g', style: 'margin:0' }, 'Has access'), ' until ', fmtTime(exp), ' (', fmtLeft(num(exp)), ' left)')
+      : h('span', null, h('span', { class: 'chip r', style: 'margin:0' }, 'No access'), exp > 0n ? ' Expired ' + fmtTime(exp) + '.' : ' Never subscribed.'));
+  } catch (e) { out.append(h('span', { style: 'color:var(--red)' }, e.code === 'INVALID_ARGUMENT' ? 'That is not a valid address or number.' : errText(e))); }
+});
+$('#sGo').addEventListener('click', async () => {
+  const out = $('#sOut'); out.replaceChildren();
+  if (!ready()) return out.append(h('span', { class: 'muted' }, 'Connect to Sepolia first.'));
+  try {
+    const a = ethers.getAddress($('#sAddr').value.trim());
+    const [sc, p] = await Promise.all([S.cr.getScorecard(a), loadProvider(a)]);
+    out.append(h('div', { class: 'label', style: 'margin-bottom:8px' }, p.exists ? p.name : 'Not a registered provider'), scorecardEl(sc));
+  } catch (e) { out.append(h('span', { style: 'color:var(--red)' }, e.code === 'INVALID_ARGUMENT' ? 'That is not a valid address.' : errText(e))); }
+});
+
+/* ======================= VERIFY (the main event) ======================= */
+const certEl = $('#cert');
+function certEmpty() {
+  certEl.className = 'cert empty';
+  certEl.replaceChildren(h('div', null, h('div', { class: 'ghost' }, 'unsealed'), h('div', null, 'The verdict appears here.'), h('div', { class: 'fine' }, 'A match shows which version and when it was entered. A mismatch shows exactly which rows differ.')));
+}
+certEmpty();
+$('#vSample').addEventListener('click', () => edV.setText(SAMPLE));
+$('#vGo').addEventListener('click', verify);
+
+function stamp(color, a, b, delay) { return h('div', { class: 'stamp ' + color, style: delay ? `--sd:${delay}` : null }, h('span', { class: 's1' }, a), h('span', { class: 's2' }, b)); }
+function rowList(rows, hashes, recSet) {
+  return h('div', { class: 'rowlist' }, rows.map((r, i) => {
+    const ok = recSet ? recSet.has(hashes[i]) : true;
+    return h('div', { class: 'r ' + (ok ? 'ok' : 'bad'), style: `--i:${i}` }, h('span', { class: 'muted' }, String(i + 1).padStart(3, '0')), h('span', { class: 'm' }, ok ? '✓' : '✕'), h('span', { class: 't', title: r }, r), ok ? '' : h('span', { class: 'why' }, 'not in record'));
+  }));
+}
+async function verify() {
+  const btn = $('#vGo');
+  if (!ready()) { certEl.className = 'cert'; certEl.replaceChildren(h('div', { class: 'callout red' }, S.eth ? 'Switch your wallet to Sepolia to read the registry.' : 'No wallet found. Install a browser wallet to read the registry.')); if (S.eth) switchChain(); return; }
+  const id = Number($('#vSel').value);
+  if (!id) { certEl.className = 'cert'; certEl.replaceChildren(h('div', { class: 'callout' }, 'Choose a dataset to check against.')); return; }
+  const rows = edV.getRows();
+  if (!rows.length) { certEl.className = 'cert'; certEl.replaceChildren(h('div', { class: 'callout' }, 'Paste at least one row.')); return; }
+  if (rows.length > S.P.MAX_ROWS) { certEl.className = 'cert'; certEl.replaceChildren(h('div', { class: 'callout red' }, `Too many rows: a version holds at most ${S.P.MAX_ROWS}.`)); return; }
+  const hashes = rows.map(hashRow);
+  const ds = S.datasets.find(d => d.id === id);
+  btn.dataset.busy = '1'; btn.disabled = true; certEl.classList.add('working');
+  try {
+    const v = await S.cr.verifyHash(id, hashes);
+    const header = h('h3', null, `Dataset № ${id}${ds ? ' · ' + ds.name : ''}`);
+    certEl.className = 'cert';
+    if (v.found) {
+      const ver = num(v.version);
+      const rec = await S.cr.getRecord(id, ver);
+      if (v.isLatest) {
+        certEl.replaceChildren(stamp('green', 'Unaltered', `matches v${ver} · current`), header,
+          h('div', { class: 'verdict-line' }, 'Every row is exactly what was recorded.'),
+          h('div', { class: 'body' }, `All ${rows.length} fingerprints match version ${ver}, in the same order, and it is still the newest version.`),
+          facts(rec, ver), h('div', { class: 'label', style: 'margin:0 0 6px' }, 'Rows'), rowList(rows, hashes, null), proves());
+      } else {
+        const latest = await S.cr.getLatestRecord(id);
+        certEl.replaceChildren(stamp('ochre', 'Superseded', `matches v${ver} · now v${num(latest.version)}`), header,
+          h('div', { class: 'verdict-line' }, 'Authentic — but out of date.'),
+          h('div', { class: 'body' }, `Your copy is exactly version ${ver}. The provider has since recorded a correction.`),
+          h('div', { class: 'callout' }, h('strong', null, `Version ${num(latest.version)} replaced it on ${fmtTime(latest.timestamp)}.`), latest.note ? [' Reason given: ', h('em', null, latest.note)] : null, h('div', null, h('button', { class: 'linkbtn', onclick: () => { S.expanded.add(id); renderCatalogue(); location.hash = '#catalogue'; setTimeout(() => $(`.lrow[data-id="${id}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50); } }, 'See the full history →'))),
+          facts(rec, ver), h('div', { class: 'label', style: 'margin:0 0 6px' }, 'Rows'), rowList(rows, hashes, null), proves());
+      }
+    } else {
+      const cc = await S.cr.classifyCopy(id, hashes);
+      const status = num(cc.status), mv = num(cc.matchedVersion), best = num(cc.bestMatchPercent);
+      if (status === 1 || status === 2) {
+        const rec = await S.cr.getRecord(id, mv);
+        certEl.replaceChildren(stamp('ochre', 'Reordered', `same rows as v${mv}`), header,
+          h('div', { class: 'verdict-line' }, 'Same rows, different order.'),
+          h('div', { class: 'body' }, `As a set, your rows are identical to version ${mv}${status === 2 ? ' — a superseded version' : ''}. The exact list differs: the rows are sorted differently, or some are repeated. No content was changed.`),
+          status === 2 ? h('div', { class: 'callout' }, 'A newer version exists, so this copy may be outdated.') : null,
+          facts(rec, mv), proves());
+      } else {
+        const target = mv || (ds ? ds.latest : num((await S.cr.datasets(id)).latestVersion));
+        const rec = await S.cr.getRecord(id, target);
+        const recSet = new Set(rec.rowHashes);
+        const mySet = new Set(hashes);
+        const bad = hashes.filter(x => !recSet.has(x)).length;
+        const missing = [...recSet].filter(x => !mySet.has(x));
+        const label = status === 3 ? 'Altered' : 'Not on record';
+        certEl.replaceChildren(stamp('red', 'No match', status === 3 ? `${best}% overlap · v${target}` : `best overlap ${best}%`), header,
+          h('div', { class: 'verdict-line' }, status === 3 ? 'This copy differs from the record.' : 'Nothing like this was ever recorded.'),
+          h('div', { class: 'body' }, status === 3
+            ? `Closest is version ${target}. ${bad} row${bad === 1 ? '' : 's'} of your ${rows.length} ${bad === 1 ? 'is' : 'are'} not in it${missing.length ? `, and ${missing.length} registered row${missing.length === 1 ? ' is' : 's are'} absent from your copy` : ''}.`
+            : `Your rows overlap at most ${best}% with any version of this dataset. Check you chose the right dataset, or that the file is the one the provider registered.`),
+          h('div', { class: 'callout red' }, status === 3 ? 'Rows marked ✕ below are not in the recorded version: they were changed, added, or the text differs even by a space.' : 'Showing your rows against the newest version.'),
+          h('div', { class: 'label', style: 'margin:0 0 6px' }, `Your rows against v${target}`), rowList(rows, hashes, recSet),
+          missing.length ? h('div', { class: 'fine' }, `${missing.length} row${missing.length === 1 ? '' : 's'} in the recorded version ${missing.length === 1 ? 'is' : 'are'} not in your copy.`) : null,
+          proves());
+      }
+    }
+    certEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  } catch (e) {
+    certEl.className = 'cert';
+    certEl.replaceChildren(h('div', { class: 'callout red' }, h('strong', null, 'The check could not run. '), errText(e)));
+  } finally { delete btn.dataset.busy; btn.disabled = false; certEl.classList.remove('working'); }
+}
+function facts(rec, ver) {
+  return h('dl', { class: 'facts' },
+    h('dt', null, 'Version'), h('dd', null, `v${ver}`, ' · ', `${rec.rowHashes.length} rows`, ver > 1 ? ` · ${num(rec.changePercent)}% changed vs v${num(rec.previousVersion)}` : ''),
+    h('dt', null, 'Entered'), h('dd', null, fmtTime(rec.timestamp), ' · block ', blockLink(rec.blockNumber)),
+    h('dt', null, 'Timeliness'), h('dd', null, chipsFor(rec).map(c => { c.style.marginLeft = '0'; return c; }), h('span', { class: 'muted' }, ` registered ${fmtDur(Math.max(0, num(rec.timestamp) - num(rec.dataTimestamp)))} after the declared date`)),
+    h('dt', null, 'Declared'), h('dd', null, fmtTime(rec.dataTimestamp), h('span', { class: 'muted' }, ' — the provider’s claim, not verified')));
+}
+function proves() {
+  return h('p', { class: 'fine' }, h('strong', null, 'What this proves: '), 'that these exact rows were recorded by this provider no later than the block shown. ', h('strong', null, 'What it doesn’t: '), 'that the data itself is true.');
+}
+
+/* ======================= boot ======================= */
+setInterval(() => { if (ready() && S.datasets.length) { renderAccount(); } }, 30000);
+if (!window.ethers) { document.body.prepend(h('div', { style: 'background:var(--red);color:#fff;padding:10px 24px;font-family:var(--sans)' }, 'ethers.js failed to load from the CDN. Check your connection or content blocker and reload.')); }
+else {
+  let r = 'none'; try { r = localStorage.getItem('registry-role') || 'none'; } catch {}
+  if (r !== 'vendor' && r !== 'subscriber') r = 'none';
+  document.body.dataset.role = r;
+  $$('.seg button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.pick === r)));
+  renderAll(); initWallet();
+}
+})();
+</script>
+</body>
+</html>
